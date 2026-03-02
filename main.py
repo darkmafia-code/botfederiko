@@ -9,6 +9,7 @@ import sys
 from bot import config
 from bot.database import init_db
 from bot.handlers import commands, events, admin, game
+from bot.database import DBSessionMiddleware
 
 
 async def main():
@@ -35,6 +36,12 @@ async def main():
         # Create dispatcher
         dp = Dispatcher()
         
+        # attach db middleware
+        dp.message.middleware(DBSessionMiddleware())
+        dp.callback_query.middleware(DBSessionMiddleware())
+        dp.my_chat_member.middleware(DBSessionMiddleware())
+        dp.message_reaction.middleware(DBSessionMiddleware())
+
         # Register routers (admin before generic event handlers)
         dp.include_router(commands.router)
         dp.include_router(admin.router)

@@ -52,60 +52,58 @@ async def help_cmd(message: types.Message):
 
 
 @router.message(Command("me"))
-async def me_cmd(message: types.Message):
+async def me_cmd(message: types.Message, db: AsyncSession):
     """Show user's stats."""
     try:
-        async with SessionLocal() as db:
-            stats = await get_or_create_stats(db, message.chat.id, message.from_user.id)
-            score = compute_total_score(stats) if stats else 0
-            level = get_level(score)
-            
-            user_name = message.from_user.full_name or f"User {message.from_user.id}"
-            
-            # Ensure all values are valid
-            msgs = stats.messages_sent or 0
-            replies = stats.replies_sent or 0
-            current = stats.current_streak or 0
-            longest = stats.longest_streak or 0
-            
-            text = (
-                f"👤 <b>{user_name}</b>\n"
-                f"💯 Очки: {score:.1f}\n"
-                f"📊 Уровень: {level}\n"
-                f"🔥 Стрик: {current} (макс {longest})\n"
-                f"📝 Сообщений: {msgs}\n"
-                f"↩️ Ответов: {replies}"
-            )
-            await message.answer(watermark(text))
+        stats = await get_or_create_stats(db, message.chat.id, message.from_user.id)
+        score = compute_total_score(stats) if stats else 0
+        level = get_level(score)
+        
+        user_name = message.from_user.full_name or f"User {message.from_user.id}"
+        
+        # Ensure all values are valid
+        msgs = stats.messages_sent or 0
+        replies = stats.replies_sent or 0
+        current = stats.current_streak or 0
+        longest = stats.longest_streak or 0
+        
+        text = (
+            f"👤 <b>{user_name}</b>\n"
+            f"💯 Очки: {score:.1f}\n"
+            f"📊 Уровень: {level}\n"
+            f"🔥 Стрик: {current} (макс {longest})\n"
+            f"📝 Сообщений: {msgs}\n"
+            f"↩️ Ответов: {replies}"
+        )
+        await message.answer(watermark(text))
     except Exception as e:
         logger.error(f"Error in /me: {e}")
         await message.answer("❌ Ошибка при получении данных")
 
 
 @router.message(Command("rank"))
-async def rank_cmd(message: types.Message):
+async def rank_cmd(message: types.Message, db: AsyncSession):
     """Show rating in chat."""
     try:
-        async with SessionLocal() as db:
-            stmt = select(UserChatStats).where(UserChatStats.chat_id == message.chat.id)
-            result = await db.execute(stmt)
-            stats_list = result.scalars().all()
-            
-            if not stats_list:
-                await message.answer("📊 Рейтинг пока пуст")
-                return
-            
-            ranked = sorted(stats_list, key=lambda s: compute_total_score(s), reverse=True)
-            text = "🏅 <b>Рейтинг в чате (топ-10):</b>\n"
-            
-            for idx, s in enumerate(ranked[:10], start=1):
-                user = await db.get(User, s.user_id)
-                if user:
-                    user_name = user.username or f"User {user.id}"
-                    score = compute_total_score(s)
-                    text += f"{idx}. @{user_name} - {score:.1f} очков\n"
-            
-            await message.answer(watermark(text))
+        stmt = select(UserChatStats).where(UserChatStats.chat_id == message.chat.id)
+        result = await db.execute(stmt)
+        stats_list = result.scalars().all()
+        
+        if not stats_list:
+            await message.answer("📊 Рейтинг пока пуст")
+            return
+        
+        ranked = sorted(stats_list, key=lambda s: compute_total_score(s), reverse=True)
+        text = "🏅 <b>Рейтинг в чате (топ-10):</b>\n"
+        
+        for idx, s in enumerate(ranked[:10], start=1):
+            user = await db.get(User, s.user_id)
+            if user:
+                user_name = user.username or f"User {user.id}"
+                score = compute_total_score(s)
+                text += f"{idx}. @{user_name} - {score:.1f} очков\n"
+        
+        await message.answer(watermark(text))
     except Exception as e:
         logger.error(f"Error in /rank: {e}")
         await message.answer("❌ Ошибка при получении рейтинга")
@@ -124,20 +122,19 @@ async def achievements_cmd(message: types.Message):
 
 
 @router.message(Command("streak"))
-async def streak_cmd(message: types.Message):
+async def streak_cmd(message: types.Message, db: AsyncSession):
     """Show streak."""
     try:
-        async with SessionLocal() as db:
-            stats = await get_or_create_stats(db, message.chat.id, message.from_user.id)
-            text = f"🔥 Текущий стрик: {stats.current_streak}\n⭐ Максимальный: {stats.longest_streak}"
-            await message.answer(watermark(text))
+        stats = await get_or_create_stats(db, message.chat.id, message.from_user.id)
+        text = f"🔥 Текущий стрик: {stats.current_streak}\n⭐ Максимальный: {stats.longest_streak}"
+        await message.answer(watermark(text))
     except Exception as e:
         logger.error(f"Error in /streak: {e}")
         await message.answer("❌ Ошибка")
 
 
 @router.message(Command("compare"))
-async def compare_cmd(message: types.Message):
+async def compare_cmd(message: types.Message, db: AsyncSession):
     """Compare with another user."""
     # aiogram v3: Message has no get_args(); parse from text safely
     text = message.text or ""
@@ -152,28 +149,27 @@ async def compare_cmd(message: types.Message):
     username = args[0].lstrip("@")
     
     try:
-        async with SessionLocal() as db:
-            stmt = select(User).where(User.username == username)
-            result = await db.execute(stmt)
-            other = result.scalars().first()
-            
-            if not other:
-                await message.answer(f"❌ Пользователь @{username} не найден")
-                return
-            
-            stats1 = await get_or_create_stats(db, message.chat.id, message.from_user.id)
-            stats2 = await get_or_create_stats(db, message.chat.id, other.id)
-            
-            score1 = compute_total_score(stats1)
-            score2 = compute_total_score(stats2)
-            
-            text = (
-                f"⚔️ <b>Сравнение</b>\n"
-                f"👤 Вы: {score1:.1f}\n"
-                f"👤 @{username}: {score2:.1f}\n"
-                f"{'🏆 Вы впереди!' if score1 > score2 else '📉 Отстаёте' if score1 < score2 else '⚖️ Равно'}"
-            )
-            await message.answer(watermark(text))
+        stmt = select(User).where(User.username == username)
+        result = await db.execute(stmt)
+        other = result.scalars().first()
+        
+        if not other:
+            await message.answer(f"❌ Пользователь @{username} не найден")
+            return
+        
+        stats1 = await get_or_create_stats(db, message.chat.id, message.from_user.id)
+        stats2 = await get_or_create_stats(db, message.chat.id, other.id)
+        
+        score1 = compute_total_score(stats1)
+        score2 = compute_total_score(stats2)
+        
+        text = (
+            f"⚔️ <b>Сравнение</b>\n"
+            f"👤 Вы: {score1:.1f}\n"
+            f"👤 @{username}: {score2:.1f}\n"
+            f"{'🏆 Вы впереди!' if score1 > score2 else '📉 Отстаёте' if score1 < score2 else '⚖️ Равно'}"
+        )
+        await message.answer(watermark(text))
     except Exception as e:
         logger.error(f"Error in /compare: {e}")
         await message.answer("❌ Ошибка при сравнении")

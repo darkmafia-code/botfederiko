@@ -2,17 +2,44 @@ from aiogram import Router, types
 from aiogram.types import Message
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from loguru import logger
 
-from ..database import SessionLocal
+
 from ..models import Chat, User, UserChatStats
 from ..utils import update_streak, compute_total_score
 
 router = Router()
 
 
+@router.my_chat_member()
+async def chat_member_update(update: types.ChatMemberUpdated, db: AsyncSession = None):
+    """Register chat when bot added or settings changed."""
+    logger.info(f"🔔 Chat member update in chat {update.chat.id}, new status {update.new_chat_member.status}")
+    if update.new_chat_member.user.id == update.bot.id and update.new_chat_member.status in ("member", "administrator"):
+        # bot added to chat, ensure chat record
+        chat = await db.get(Chat, update.chat.id)
+        if not chat:
+            chat = Chat(id=update.chat.id, title=update.chat.title or "Unknown")
+            db.add(chat)
+            await db.flush()
+            logger.info(f"✅ Registered chat {update.chat.id} via my_chat_member")
+
+
+@router.message_reaction()
+async def reaction_handler(reaction: types.MessageReaction, db: AsyncSession = None):
+    logger.debug(f"Reaction {reaction.type} by {reaction.user.id} in chat {reaction.chat.id}")
+    # optional: increment stats
+
+
+@router.message(deep_link=None)
+async def message_deleted(message: Message, db: AsyncSession = None):
+    # message deletion events aren't supported directly; listen to service messages? or use other update types
+    pass
+
+
 @router.message()
-async def message_handler(message: Message):
+async def message_handler(message: Message, db: AsyncSession):
     """Track message events."""
     # Log incoming message
     logger.debug(f"📩 Message received from {message.from_user.id} in chat {message.chat.id}: {message.text[:50] if message.text else 'no text'}")

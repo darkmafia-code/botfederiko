@@ -9,6 +9,7 @@ class Chat(Base):
     __tablename__ = "chats"
     id = Column(BigInteger, primary_key=True, index=True)
     title = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     users = relationship("UserChatStats", back_populates="chat")
 

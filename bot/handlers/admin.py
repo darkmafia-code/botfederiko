@@ -5,7 +5,7 @@ from loguru import logger
 import asyncio
 
 from ..config import ADMIN_ID, WATERMARK
-from ..database import SessionLocal
+
 from ..models import Chat
 from ..utils import watermark, parse_buttons
 
@@ -33,16 +33,15 @@ async def broadcast_cmd(message: types.Message):
 
 
 @router.message(Command("stats"))
-async def stats_cmd(message: types.Message):
+async def stats_cmd(message: types.Message, db: AsyncSession):
     """Show bot stats (admin only)."""
     if message.from_user.id != ADMIN_ID:
         return
 
     try:
-        async with SessionLocal() as db:
-            result = await db.execute(select(Chat))
-            chats = result.scalars().all()
-            await message.answer(f"📊 Чатов в базе: {len(chats)}")
+        result = await db.execute(select(Chat))
+        chats = result.scalars().all()
+        await message.answer(f"📊 Чатов в базе: {len(chats)}")
     except Exception as e:
         logger.error(f"Error getting stats: {e}")
 
@@ -137,7 +136,7 @@ async def admin_broadcast_flow(message: types.Message):
 
 
 @router.callback_query(F.data.startswith("broadcast:"))
-async def broadcast_confirm_cb(query: types.CallbackQuery):
+async def broadcast_confirm_cb(query: types.CallbackQuery, db: AsyncSession):
     """Handle confirm/cancel callbacks for broadcast."""
     admin_id = query.from_user.id
     if admin_id != ADMIN_ID:
@@ -165,7 +164,6 @@ async def broadcast_confirm_cb(query: types.CallbackQuery):
         sent = 0
         failed = 0
         try:
-            async with SessionLocal() as db:
                 result = await db.execute(select(Chat))
                 chats = result.scalars().all()
                 for ch in chats:
