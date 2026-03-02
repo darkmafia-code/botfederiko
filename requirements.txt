@@ -1,0 +1,7 @@
+textaiogram==3.13.1
+APScheduler==3.11.1
+SQLAlchemy==2.0.47
+aiosqlite==0.22.0
+python-dotenv==1.2.0
+loguru==0.7.1
+python-dateutil==2.8.2
